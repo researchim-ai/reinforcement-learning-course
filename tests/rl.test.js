@@ -20,3 +20,27 @@ test('all bilingual equations and inline math render without TeX errors',async()
  assert.ok(renderMathText('<script> $x^2$').startsWith('&lt;script&gt;'));
  assert.ok(renderMath('\\frac{1}{2}').includes('mfrac'));
 });
+
+test('quest gates require reading, correct tasks and a separate successful experiment',async()=>{
+ const {initialProgress,canClear,canEnter,clearStation,submitAnswer,stations}=await import('../src/quest.js');
+ const p=initialProgress();assert.equal(canEnter(p,1),false);assert.equal(submitAnswer(p,1,0,3),false);assert.equal(clearStation(p,0,4),false);
+ p.read=['0-0','0-1','0-2','0-3'];assert.equal(submitAnswer(p,0,0,'2,75'),true);assert.equal(submitAnswer(p,0,0,''),false);assert.equal(submitAnswer(p,0,1,0),false);assert.equal(submitAnswer(p,0,1,1),true);
+ assert.equal(canClear(p,0,4),false);p.experiment=true;assert.equal(clearStation(p,0,4),true);assert.equal(canEnter(p,1),true);assert.equal(canEnter(p,2),false);
+ for(let s=1;s<9;s++){modules[s][6].forEach((_,j)=>p.read.push(`${s}-${j}`));stations[s].questions.forEach((q,j)=>assert.equal(submitAnswer(p,s,j,q.answer),true));assert.equal(clearStation(p,s,modules[s][6].length),true);}
+ assert.deepEqual(p.cleared,[0,1,2,3,4,5,6,7,8]);
+});
+test('quest persistence rejects invalid shapes and nonconsecutive unlocks',async()=>{
+ const {sanitizeProgress}=await import('../src/quest.js');
+ assert.deepEqual(sanitizeProgress(null).cleared,[]);
+ assert.deepEqual(sanitizeProgress({version:1,cleared:[0,2,4],read:['bad','0-0','0-0'],answers:[]}).cleared,[0]);
+ assert.deepEqual(sanitizeProgress({version:1,read:['bad','0-0','0-0']}).read,['0-0']);
+});
+test('greedy evaluation never mutates learned Q values or training metrics',async()=>{
+ const {evaluateGreedy}=await import('../src/rl.js');const a=new GridAgent(seeded());a.train(2000);const before=JSON.stringify(a);const result=evaluateGreedy(a);assert.ok(result.success);assert.ok(result.steps<=100);assert.equal(JSON.stringify(a),before);
+});
+test('bandit exploration tries every arm and UCB identifies the better receiver',async()=>{
+ const {BanditAgent}=await import('../src/rl.js');const a=new BanditAgent(seeded());for(let i=0;i<3000;i++)a.step('ucb');assert.equal(a.round,3000);assert.ok(a.counts.every(n=>n>0));assert.ok(a.counts[2]>a.counts[0]+a.counts[1]);assert.ok(a.regret>=0);assert.equal(a.pull(10),null);
+});
+test('advanced chapters have distinct, bilingual records and caveats',async()=>{
+ const {notes}=await import('../src/lesson-notes.js');assert.equal(Object.keys(notes).length,34);assert.equal(new Set(Object.values(notes).map(n=>n.formula)).size,34);for(const note of Object.values(notes))for(const field of ['body','example','pitfall'])assert.ok(note[field][0]&&note[field][1]);
+});
