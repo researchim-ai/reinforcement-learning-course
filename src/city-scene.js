@@ -5,8 +5,8 @@ import {cityObjects,chapters} from './narrative.js';
 // Original, procedural city. No external models, textures or game assets.
 export function mountCity(host,{interactive=false,motion=true,en=false,chapter=0,restored=0,fog=1.15,onInspect=()=>{},onPosition=()=>{}}={}){
  let renderer;try{renderer=new THREE.WebGLRenderer({antialias:true,alpha:false,powerPreference:'low-power'});}catch{host.classList.add('city-fallback');host.textContent=en?'3D is unavailable. Use the object list to explore.':'3D недоступен. Исследуйте город через список объектов.';return {dispose(){host.replaceChildren();},walkTo(id){onInspect(id);},setFlashlight(){},setFog(){},move(){},reset(){}};}
- const low=matchMedia('(max-width:650px)').matches;renderer.setPixelRatio(Math.min(devicePixelRatio,low?1.25:1.6));renderer.setClearColor(0x626d68);renderer.outputColorSpace=THREE.SRGBColorSpace;host.appendChild(renderer.domElement);
- const scene=new THREE.Scene();scene.background=new THREE.Color(0x626d68);scene.fog=new THREE.FogExp2(0x77837a,(interactive?.047:.032)*fog);
+ const low=matchMedia('(max-width:650px)').matches;renderer.setPixelRatio(Math.min(devicePixelRatio,low?1.25:1.6));renderer.setClearColor(0x77837a);renderer.outputColorSpace=THREE.SRGBColorSpace;host.appendChild(renderer.domElement);
+ const scene=new THREE.Scene();scene.background=new THREE.Color(0x77837a);scene.fog=new THREE.FogExp2(0x77837a,(interactive?.047:.032)*fog);
  const camera=new THREE.PerspectiveCamera(interactive?64:45,1,.1,190);camera.position.set(interactive?0:2,interactive?1.75:3.1,interactive?19:24);
  let yaw=interactive?0:-.04,lookY=0,target=null,arrival=null,raf,last=0,elapsed=0,pointer=null;
  const keys=new Set(),materials=[],textures=[],fogPlanes=[],labels=[];const vector=new THREE.Vector3();
