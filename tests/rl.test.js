@@ -22,11 +22,11 @@ test('all bilingual equations and inline math render without TeX errors',async()
 });
 
 test('quest gates require reading, correct tasks and a separate successful experiment',async()=>{
- const {initialProgress,canClear,canEnter,clearStation,submitAnswer,stations}=await import('../src/quest.js');
+ const {initialProgress,canClear,canEnter,clearStation,submitAnswer,recordBossVictory,stations}=await import('../src/quest.js');
  const p=initialProgress();assert.equal(canEnter(p,1),false);assert.equal(submitAnswer(p,1,0,3),false);assert.equal(clearStation(p,0,4),false);
  p.read=['0-0','0-1','0-2','0-3'];assert.equal(submitAnswer(p,0,0,'2,75'),true);assert.equal(submitAnswer(p,0,0,''),false);assert.equal(submitAnswer(p,0,1,0),false);assert.equal(submitAnswer(p,0,1,1),true);
- assert.equal(canClear(p,0,4),false);p.experiment=true;assert.equal(clearStation(p,0,4),true);assert.equal(canEnter(p,1),true);assert.equal(canEnter(p,2),false);
- for(let s=1;s<9;s++){modules[s][6].forEach((_,j)=>p.read.push(`${s}-${j}`));stations[s].questions.forEach((q,j)=>assert.equal(submitAnswer(p,s,j,q.answer),true));assert.equal(clearStation(p,s,modules[s][6].length),true);}
+ assert.equal(canClear(p,0,4),false);p.experiment=true;assert.equal(clearStation(p,0,4),false);const {runBoss,bosses}=await import('../src/bosses.js');assert.equal(recordBossVictory(p,0,runBoss(0,bosses[0].good)),true);assert.equal(clearStation(p,0,4),true);assert.equal(canEnter(p,1),true);assert.equal(canEnter(p,2),false);
+ for(let s=1;s<9;s++){modules[s][6].forEach((_,j)=>p.read.push(`${s}-${j}`));stations[s].questions.forEach((q,j)=>assert.equal(submitAnswer(p,s,j,q.answer),true));assert.equal(clearStation(p,s,modules[s][6].length),false);assert.equal(recordBossVictory(p,s,runBoss(s,bosses[s].good)),true);assert.equal(clearStation(p,s,modules[s][6].length),true);}
  assert.deepEqual(p.cleared,[0,1,2,3,4,5,6,7,8]);
 });
 test('quest persistence rejects invalid shapes and nonconsecutive unlocks',async()=>{
@@ -56,4 +56,20 @@ test('story endings require the completed course, and preserving memory also req
 test('all nine story chapters have bilingual conversations, choices, and distinct evidence',async()=>{
  const {chapters,cityObjects}=await import('../src/narrative.js');assert.equal(chapters.length,9);assert.equal(cityObjects.length,5);for(const ch of chapters){assert.equal(ch.dialogue.length,4);assert.equal(ch.choices.length,2);for(const en of [0,1]){assert.ok(ch.name[en]&&ch.place[en]&&ch.log[en]);assert.ok(ch.evidence[0][en]&&ch.evidence[1][en]);for(const l of ch.dialogue)assert.ok(l.who&&l.text[en]);}}
  assert.equal(new Set(chapters.map(c=>c.evidence[0][0])).size,9);
+});
+
+test('all nine bosses have attainable multi-seed victories and real failed configurations',async()=>{
+ const {bosses,runBoss,bossDefaults}=await import('../src/bosses.js');
+ for(let i=0;i<9;i++){
+  for(const param of bosses[i].params){const v=bosses[i].good[param.key];assert.ok(v>=param.min&&v<=param.max);assert.ok(Math.abs((v-param.min)/param.step-Math.round((v-param.min)/param.step))<1e-6,'winning configuration is reachable with the UI slider');}
+  const good=runBoss(i,bosses[i].good);assert.equal(good.passed,true,`boss ${i} should be attainable`);assert.equal(good.runs.length,3);assert.deepEqual(good.seeds,[127,733,2027]);assert.ok(good.curve.length>0);assert.ok(good.arena);
+  const bad=runBoss(i,bossDefaults(i));assert.equal(bad.passed,false,`boss ${i} should reject the unadjusted configuration`);
+  assert.equal(runBoss(i,bosses[i].good).metrics.success,good.metrics.success,'seeds make outcomes repeatable');
+ }
+});
+test('boss reports cannot unlock future sectors and old completion is preserved',async()=>{
+ const {initialProgress,sanitizeProgress,recordBossVictory}=await import('../src/quest.js');const {runBoss,bosses}=await import('../src/bosses.js');const p=initialProgress();
+ assert.equal(recordBossVictory(p,1,runBoss(1,bosses[1].good)),false);assert.equal(recordBossVictory(p,0,{index:0,passed:true}),false);
+ const old=sanitizeProgress({version:1,cleared:[0,1],experiment:true,read:[],answers:[]});assert.deepEqual(old.cleared,[0,1]);assert.deepEqual(old.bosses,[0,1]);
+ const invalid=runBoss(0,bosses[0].good);invalid.metrics.success=0;assert.equal(recordBossVictory(p,0,invalid),false);
 });

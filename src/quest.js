@@ -1,6 +1,7 @@
+import {evaluateBossCriteria,normalizeParams} from './bosses.js';
 // Quest state and answer validation are independent of presentation.
 export const QUEST_KEY = 'rl-atlas-expedition-v1';
-export const initialProgress = () => ({version:1, read:[], answers:[], cleared:[], experiment:false});
+export const initialProgress = () => ({version:1, read:[], answers:[], cleared:[], bosses:[], bossReports:{}, experiment:false});
 export function sanitizeProgress(value) {
  const base=initialProgress();
  if(!value || value.version!==1)return base;
@@ -8,13 +9,16 @@ export function sanitizeProgress(value) {
  base.answers=Array.isArray(value.answers)?[...new Set(value.answers.filter(x=>/^\d-[01]$/.test(x)))]:[];
  // A malformed saved state must not skip stations.
  for(let i=0;i<9;i++){if(!Array.isArray(value.cleared)||!value.cleared.includes(i))break;base.cleared.push(i);}
- base.experiment=value.experiment===true;return base;
+ base.experiment=value.experiment===true;
+ base.bosses=[...new Set([...base.cleared,...(Array.isArray(value.bosses)?value.bosses.filter(i=>Number.isInteger(i)&&i>=0&&i<=Math.min(base.cleared.length,8)):[])])];
+ if(value.bossReports&&typeof value.bossReports==='object')for(const i of base.bosses){const r=value.bossReports[i];if(validBossReport(i,r))base.bossReports[i]=summaryBossReport(r);}
+ return base;
 }
 export const unlockedStation = p => Math.min(p.cleared.length,8);
 export const canEnter = (p,i) => Number.isInteger(i)&&i>=0&&i<9&&i<=unlockedStation(p);
 export function canClear(p,i,lessonCount) {
  return canEnter(p,i) && Array.from({length:lessonCount},(_,j)=>p.read.includes(`${i}-${j}`)).every(Boolean)
- && [0,1].every(j=>p.answers.includes(`${i}-${j}`)) && (i!==0||p.experiment);
+ && [0,1].every(j=>p.answers.includes(`${i}-${j}`)) && p.bosses.includes(i) && (i!==0||p.experiment);
 }
 export function submitAnswer(p,station,index,value) {
  if(!canEnter(p,station))return false;
@@ -38,3 +42,16 @@ export const stations=[
  {name:['Контур сдерживания','Containment ring'],short:['Сложные среды','Complex environments'],artifact:['Протокол безопасности','Safety protocol'],signal:'68.8',story:['Вы здесь не одни. Другой агент меняет маршруты, часть датчиков молчит, а короткий путь проходит через опасную зону. Максимальная награда ещё не означает допустимое решение.','You are not alone. Another agent changes routes, some sensors are silent, and the shortest path crosses a dangerous area. Maximum reward does not automatically make a solution acceptable.'],objective:['Проверить ограничения и выбрать представление для частичной наблюдаемости.','Check constraints and choose a representation for partial observability.'],note:['Победа, нарушившая ограничения, не открывает дверь.','A victory that violates constraints will not open the door.'],questions:[number('Лимит ожидаемой стоимости d=3. Политика имеет Jc=4.5. На сколько превышен лимит?','Expected-cost limit d=3. A policy has Jc=4.5. By how much is the limit exceeded?',1.5,'4.5−3 = 1.5. Высокая награда не компенсирует нарушение жёстко заданного ограничения допустимости.','4.5−3 = 1.5. High reward does not make a policy feasible when it violates the specified constraint.'),choice('Два одинаковых кадра требуют разных действий из-за скрытой истории. Что может помочь?','Two identical frames require different actions because of hidden history. What can help?',[['Убрать историю и увеличить награду','Remove history and increase reward'],['Память recurrent policy или belief state','Recurrent-policy memory or a belief state'],['Всегда брать argmax последнего кадра','Always take argmax on the last frame']],1,'История помогает восстановить скрытую информацию. Память не делает любую задачу полностью наблюдаемой, но расширяет доступный контекст.','History helps infer hidden information. Memory does not make every task fully observable, but it increases available context.')]},
  {name:['Маяк','The beacon'],short:['Исследование','Research'],artifact:['Восстановленный сигнал','Restored signal'],signal:'61.7',story:['Антенна готова. Осталось решить, чему можно доверять в вашем отчёте. Один удачный эпизод похож на спасение. Воспроизводимый результат — на сигнал, который услышат и другие.','The antenna is ready. One decision remains: what can be trusted in your report? A single lucky episode feels like rescue. A reproducible result is a signal others can receive.'],objective:['Оценить результат честно и восстановить связь.','Evaluate results honestly and restore contact.'],note:['Не самый красивый график. Тот, который выдержит повторение.','Not the prettiest curve. The one that survives replication.'],questions:[number('Средние возвраты трёх независимых запусков: 6, 9, 12. Каково среднее по запускам?','Mean returns of three independent runs: 6, 9, 12. What is the mean across runs?',9,'(6+9+12)/3 = 9. Это точечная оценка; для отчёта также нужны разброс и описание процедуры оценки.','(6+9+12)/3 = 9. This is a point estimate; a report also needs uncertainty and the evaluation procedure.'),choice('Как честнее сравнить два алгоритма?','How should two algorithms be compared fairly?',[['Сравнить лучшие эпизоды с разными бюджетами','Compare their best episodes with different budgets'],['Одинаковые бюджеты, несколько сидов и отдельная оценка','Equal budgets, multiple seeds, and separate evaluation'],['Показать только самый удачный seed','Show only the luckiest seed']],1,'Зафиксируйте протокол, используйте одинаковый бюджет, независимые сиды и интервалы неопределённости. Не подбирайте отчёт по одному удачному запуску.','Fix the protocol, use equal budgets, independent seeds, and uncertainty intervals. Do not select the report based on a single lucky run.')]}
 ];
+
+function validBossReport(index,report){
+ if(!report||report.index!==index||report.engineVersion!==1||report.passed!==true||!report.metrics||!Array.isArray(report.seeds)||report.seeds.join(',')!=='127,733,2027')return false;
+ const fields=['success','steps','regret','risk','error','effort','reward'];
+ if(!fields.every(k=>Number.isFinite(report.metrics[k])))return false;
+ return evaluateBossCriteria(index,report.metrics).every(Boolean);
+}
+function summaryBossReport(report){return {index:report.index,params:normalizeParams(report.index,report.params||{}),metrics:{...report.metrics},checks:evaluateBossCriteria(report.index,report.metrics),seeds:[...report.seeds],engineVersion:report.engineVersion,passed:true};}
+export function recordBossVictory(progress,index,report){
+ if(!canEnter(progress,index)||!validBossReport(index,report))return false;
+ if(!progress.bosses.includes(index))progress.bosses.push(index);
+ progress.bossReports[index]=summaryBossReport(report);if(index===0)progress.experiment=true;return true;
+}
