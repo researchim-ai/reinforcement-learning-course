@@ -44,3 +44,16 @@ test('bandit exploration tries every arm and UCB identifies the better receiver'
 test('advanced chapters have distinct, bilingual records and caveats',async()=>{
  const {notes}=await import('../src/lesson-notes.js');assert.equal(Object.keys(notes).length,34);assert.equal(new Set(Object.values(notes).map(n=>n.formula)).size,34);for(const note of Object.values(notes))for(const field of ['body','example','pitfall'])assert.ok(note[field][0]&&note[field][1]);
 });
+
+test('city story preserves old course progress and validates district access',async()=>{
+ const {initialStory,sanitizeStory,recordConversation,collectEvidence}=await import('../src/narrative.js');
+ const s=initialStory();assert.equal(recordConversation(s,1,0,0),false);assert.equal(collectEvidence(s,2,1),false);assert.equal(recordConversation(s,0,2,0),false);assert.equal(recordConversation(s,0,1,0),true);assert.equal(collectEvidence(s,0,0),true);assert.equal(collectEvidence(s,0,0),true);assert.deepEqual(s.evidence,[0]);assert.equal(s.choices[0],1);
+ const reloaded=sanitizeStory(JSON.parse(JSON.stringify(s)));assert.deepEqual(reloaded,s);assert.deepEqual(sanitizeStory({version:1,evidence:[-1,0,0,11,'1'],heard:{bad:true},choices:{0:5}}).evidence,[0]);
+});
+test('story endings require the completed course, and preserving memory also requires evidence',async()=>{
+ const {initialStory,finishStory}=await import('../src/narrative.js');const s=initialStory();assert.equal(finishStory(s,'restart',8),false);assert.equal(finishStory(s,'memory',9),false);assert.equal(finishStory(s,'unknown',9),false);assert.equal(finishStory(s,'restart',9),true);s.evidence=[0,2,4,7];assert.equal(finishStory(s,'memory',9),true);assert.equal(s.ending,'memory');
+});
+test('all nine story chapters have bilingual conversations, choices, and distinct evidence',async()=>{
+ const {chapters,cityObjects}=await import('../src/narrative.js');assert.equal(chapters.length,9);assert.equal(cityObjects.length,5);for(const ch of chapters){assert.equal(ch.dialogue.length,4);assert.equal(ch.choices.length,2);for(const en of [0,1]){assert.ok(ch.name[en]&&ch.place[en]&&ch.log[en]);assert.ok(ch.evidence[0][en]&&ch.evidence[1][en]);for(const l of ch.dialogue)assert.ok(l.who&&l.text[en]);}}
+ assert.equal(new Set(chapters.map(c=>c.evidence[0][0])).size,9);
+});

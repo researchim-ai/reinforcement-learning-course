@@ -1,7 +1,9 @@
+import {mountCity} from './city-scene.js';
 import * as THREE from 'three';
 import {WALLS,TRAPS,GOAL} from './rl.js';
-export function mountWorld(host,{type='station',agent,motion=true,policy=()=>true,onTick=()=>{}}={}){
+export function mountWorld(host,{type='station',agent,motion=true,policy=()=>true,onTick=()=>{},en=false,restored=0,fog=1.15}={}){
  if(!host)return()=>{};
+ if(type==='station'){const city=mountCity(host,{motion,en,restored,fog});return ()=>city.dispose();}
  let renderer;
  try{renderer=new THREE.WebGLRenderer({antialias:true,alpha:true,powerPreference:'low-power'});}catch{host.classList.add('no-webgl');host.innerHTML='<div class="fallback-tower"></div>';return()=>{};}
  renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.setClearColor(0x121616,0);renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;host.appendChild(renderer.domElement);
